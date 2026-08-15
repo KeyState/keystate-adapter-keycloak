@@ -4,16 +4,27 @@ This document describes how work moves through the Keystate repos, day to
 day. It applies to every repo in the organization unless a repo's own README
 says otherwise.
 
----
-
 ## 1. Branching Model
 
-**Trunk-based development.** Every repo protects `main`: no direct pushes,
-all changes land via pull request, at least one review required. Feature
-branches are short-lived — created off `main`, merged back into `main`,
-deleted. No long-lived `develop` or per-feature integration branches. With
-five repos to keep in sync, long-lived branches are exactly what causes
-drift; keep the tree flat.
+Two protected branches, and everything between them flows through pull
+requests:
+
+- **`develop` — integration branch, where all work lands.** Feature and fix
+  branches are created off `develop`, and merged back into `develop` via PR
+  (at least one review required). Short-lived: created off develop, merged
+  back in, deleted. All quality gates in `ci.yml` run here — on every push to
+  `develop` and on every PR.
+- **`main` — release-only.** Nothing is pushed to `main` directly and feature
+  work never merges there. The *only* way `main` changes is a release PR from
+  `develop`, which is exactly what's merged when a release is wanted. Merging
+  it triggers `release.yml`, which gates the release and publishes.
+
+Releases are a deliberate act, not an ambient side effect of merging work:
+
+- a PR targets `main` only when it's meant to ship;
+- `develop` keeps accumulating ordinary work without ever touching `main`;
+- this mirrors the five-repo flow in the release document, where adapters and
+  the CLI pin tagged core versions rather than publishing every core change.
 
 Branch naming: `feat/<short-description>`, `fix/<short-description>`,
 `chore/<short-description>`. Keep it short enough to read in a PR list.
@@ -32,15 +43,36 @@ most non-trivial features touch more than one repo, in a fixed order. Take
 
 ### Step 1 — Does this change the canonical model?
 
-Ask this first, always. If the feature only affects how one backend maps
-into an *existing* canonical shape, skip to Step 3 and stay entirely in the
-adapter repo. If it introduces a new concept the canonical model doesn't yet
-represent — as "client scope mappers" would, the first time — start in
-`keystate-core`.
+Ask this first, always — but expect the answer to be "no" most of the time.
+Since canonical structs carry only a thin set of common fields plus an open
+`native: serde_json::Value`, the large majority of feature work is "extract
+this field Keycloak already has and put it in native, and add its path to
+the manifest" — entirely within the adapter repo, no core release required.
+That's intentional: it's what keeps adapter velocity decoupled from core's
+release cadence.
+
+A core change is only needed for one of these:
+
+- A field is a genuine promotion candidate — it now appears in native for two
+  or more backends and belongs in common for cross-backend comparison to
+  work. Promotions are additive minor bumps in core, and get a changelog
+  entry naming the fields and backends that justified the move. They also
+  carry a release-train obligation: all live adapters must absorb the new
+  common field before any CLI tags a combination including it, or
+  verification will read healthy realms as "incomplete" due to version skew
+  (see `RELEASE.md` §1).
+- A new envelope-level concept, not an entity-level one — e.g. the envelope
+  needs to carry something new about `backend_info` itself.
+- A new cross-cutting mechanism — e.g. the volatile flag or the
+  canonical-writer contract being introduced or changed, which every adapter
+  needs to honor.
+
+If none of those apply, skip straight to Step 3 and stay entirely in the
+adapter repo.
 
 ### Step 2 — `keystate-core`
 
-- Branch off `main`.
+- Branch off `develop`.
 - Extend the canonical model (e.g. add a `ClientScopeMapper` struct, or a
   field on an existing struct). Keep new fields additive where possible —
   adding a field is a minor version bump; changing or removing one is a
@@ -50,9 +82,10 @@ represent — as "client scope mappers" would, the first time — start in
 - Update the `FieldManifest` / completeness-verification data so the new
   field is something the verifier actually checks for, not just a struct
   sitting unused.
-- Open a PR. On merge, tag a release per the versioning rules in the release
+- Open a PR to `develop`. Once a group of changes is ready to ship, open the
+  release PR from `develop` to `main`; merging it publishes per the release
   document. **Nothing downstream should start consuming the new core version
-  until it's actually tagged and published** — don't build against `main`.
+  until it's actually tagged and published** — don't build against a branch.
 
 ### Step 3 — Adapter (e.g. `keystate-adapter-keycloak`)
 
@@ -65,7 +98,8 @@ represent — as "client scope mappers" would, the first time — start in
   populated correctly, not just that the code compiles.
 - Add a determinism test if the new data introduces any new ordering
   concerns (see Section 4.4).
-- Open a PR. On merge, tag an adapter release.
+- Open a PR to `develop`. Releases happen via the release PR from `develop`
+  to `main`.
 
 ### Step 4 — `keystate-cli`
 
@@ -74,9 +108,9 @@ represent — as "client scope mappers" would, the first time — start in
 - Run the full local test suite and the compatibility matrix check.
 - Update the CLI's own compatibility matrix entry if this changes which
   backend versions are supported.
-- Open a PR. On merge, tag a CLI release — this is the artifact that
-  actually ships to users, so it's the one release that triggers a Docker
-  image build and publish.
+- Open a PR to `develop`. When the combination is ready, merge the release
+  PR to `main` — this is the artifact that actually ships to users, so it's
+  the one release that triggers a Docker image build and publish.
 
 The rule of thumb: **core → adapter → cli, always in that order, never
 skipped.** An adapter should never depend on an unreleased core commit, and
@@ -116,17 +150,27 @@ this is what both local development and CI integration tests run against.
 Four layers, each catching a different class of problem:
 
 ### 4.1 Unit tests (every repo)
+
 Standard `cargo test` coverage of pure logic — canonical model
 serialization, mapping functions, the completeness-verification engine
 itself. No database involved. Run on every commit, every PR, fast.
 
 ### 4.2 Contract tests (`keystate-core`, run by every adapter)
+
 `keystate-core` ships a reusable test suite that any `Extractor`
 implementation must pass — this is what actually enforces the port contract
 beyond the type signature. Every adapter repo imports and runs this suite
 against its own implementation as part of CI.
 
+The suite covers: canonical serialization determinism (serialize twice,
+assert byte-identical, roundtrip), volatile segregation (every
+manifest-volatile path lands in the volatile section and nowhere else),
+manifest self-consistency, and synthetic-case verifier checks (empty realm,
+zero-row entities, missing required fields, misplaced volatile fields). See
+`ARCHITECTURE.md` §7.
+
 ### 4.3 Integration tests (adapter repos)
+
 Real backend, real database, via `testcontainers`. These run against a
 matrix of supported backend versions (e.g. the last 3–4 Keycloak minor
 versions) so a schema change in a specific version is caught in CI, not
@@ -136,12 +180,14 @@ backend releases even when no PR is open (see the release document's
 upstream-tracking section).
 
 ### 4.4 Determinism / idempotency tests (adapter and CLI repos)
+
 Run extraction twice against an unchanged fixture database, hash both
 outputs, assert the hashes match. This is a direct, automated check on the
 idempotency property from the architecture document — any PR that breaks it
 should fail CI, not get caught in manual review.
 
 ### 4.5 Completeness regression tests (adapter repos, scheduled)
+
 Periodically extract from a throwaway Keycloak instance via Keystate, and
 separately via Keycloak's own official CLI export (the stop-server one),
 then diff the two. This is the strongest available check that the DB-based
@@ -151,12 +197,19 @@ test server.
 
 ## 5. What CI Runs, and When
 
+CI lives in `.github/workflows/ci.yml` (checks) and
+`.github/workflows/release.yml` (release-plz automation).
+
 | Trigger | Checks |
 |---|---|
-| Every push to a PR | `cargo fmt --check`, `cargo clippy -- -D warnings`, unit tests, contract tests |
-| PR merge to `main` | All of the above, plus integration tests against the primary supported backend version |
-| Nightly, scheduled | Full backend version matrix (integration tests across all supported versions), completeness regression test |
-| Release tag | Full test suite, `cargo audit` / `cargo deny` for dependency vulnerabilities, then build + publish |
+| Every PR (to develop or main) and every push to develop | `cargo fmt --check`, `cargo clippy -- -D warnings`, unit + doc tests, MSRV check (1.85), `cargo audit`, `cargo deny` |
+| PR to main (the release PR) | Quality gate: fmt, clippy, tests, `cargo package` |
+| Release PR merged into main | release-plz creates the git tag (`keystate-adapter-keycloak-v<version>`), publishes to crates.io, and creates the GitHub release |
+| Nightly, scheduled | Full backend version matrix (integration tests across all supported versions), completeness regression test (adapter repos) |
+
+Nothing ships without a green gate: the release-plz job only runs on the main
+merge, and the crates.io token exists only as the `CARGO_REGISTRY_TOKEN`
+secret.
 
 ## 6. Code Review Checklist
 
@@ -171,6 +224,10 @@ check:
 - **Is the completeness manifest updated alongside any new field?** A field
   that exists in the model but isn't tracked by the verifier is a silent gap
   in exactly the property (completeness) this tool exists to guarantee.
+- **Does any new output path keep the trust boundary intact?** Data never
+  transits Keystate-operated infrastructure; a new sink is a new
+  `OutputSink` implementation running in the user's own environment, never a
+  Keystate-owned endpoint (ARCHITECTURE.md §3.4).
 - **Are secrets or credential data ever logged, printed, or included in
   error messages?** Given what this tool touches, this is a hard no in every
   review, not a style preference.

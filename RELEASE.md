@@ -24,27 +24,99 @@ there forces a major bump in every adapter that hasn't absorbed the change
 yet, which is expensive across five repos. Prefer additive changes whenever
 the model allows it.
 
+**Promotions are a special release case (and a release-train obligation).** A
+promotion (same native field seen in two or more backends, moved into common,
+per the architecture document §3.1) is an additive minor bump in `keystate-core`
+and always gets a changelog entry naming the fields and the backends that
+justified the move. But an adapter that has not absorbed the new common field
+extracts it missing, and the verifier then flags healthy realms as incomplete
+— version skew misread as drift. So a promotion is only tagged once *all* live
+adapters ship compatible minor bumps, and `keystate-cli` only tags a combination
+after every constituent repo has absorbed it. A promotion is never released
+piecemeal across the org.
+
 ## 2. Release Mechanics
 
-- **Tag-based releases.** A release is a git tag (`v1.4.0`) on `main`,
-  nothing more exotic. No separate release branches.
-- **Changelogs generated from Conventional Commits.** Since commit messages
-  are structured (`feat:`, `fix:`, etc., per the development document),
-  changelog generation and the semver bump itself can be automated with a
-  tool like `release-please` or `cargo-release` rather than hand-written —
-  removes a manual step that's easy to get wrong or skip under time
-  pressure.
-- **Publish targets per repo:**
-  - `keystate-core` and each adapter publish as crates (crates.io once the
-    project is public and stable enough to commit to that namespace; a
-    private registry is fine in the meantime).
-  - `keystate-cli` is the only repo that builds and publishes the actual
-    distributable: the binary release on GitHub Releases, and the Docker
-    image, pushed on every tagged release via CI.
-- **No release goes out with a failing nightly.** The scheduled backend-matrix
-  and completeness-regression tests (from the development document) act as a
-  gate — if the nightly run against `main` is red, that's fixed before the
-  next tag, not after.
+Releases are automated end to end with [release-plz], driven by the
+Conventional Commits in the repository history. The pipeline lives in
+`.github/workflows/release.yml`; CI gates live in `.github/workflows/ci.yml`.
+
+**Branches: `develop` integrates, `main` releases.** All work merges into
+`develop` via PR and is gated by `ci.yml`. Nothing is ever pushed to `main`
+directly. A release is the deliberate act of opening a **release PR from
+`develop` to `main`** and merging it.
+
+- **A release PR to `main` is gated, then merged.** `release.yml` runs a
+  quality gate (fmt, clippy `-D warnings`, tests, `cargo package`) on the PR
+  to `main`. Once merged, release-plz computes what changed since the last
+  release:
+  - if there are unreleased commits, it opens/updates a **release PR** that
+    bumps `Cargo.toml`, appends to `CHANGELOG.md`, and labels the PR;
+  - once *that* PR is merged, it **creates the git tag
+    (`keystate-adapter-keycloak-v<version>`), publishes the crate to
+    crates.io, and creates the GitHub release** — all in CI, from the
+    `release-pr` command.
+- **No direct pushes to `main`, no manual tagging, no manual `cargo publish`.**
+  The only way `main` changes is a merged PR from `develop`; the crates.io
+  token exists only as the `CARGO_REGISTRY_TOKEN` repository secret.
+- **Releases only happen on green gates.** `release.yml` gates the merge PR
+  before it lands; `ci.yml` runs fmt, clippy, the unit suite, doctests, an
+  MSRV check (1.85), `cargo audit`, and `cargo-deny` on every PR and push to
+  `develop`.
+- **Semver is derived, not decided by hand.** Commit types map to the bump
+  (`feat:` → minor, `fix:`/`chore:` → patch, breaking → major), which keeps
+  the versioning policy above mechanical rather than a judgement call per
+  release.
+- **First publish is the one manual step.** The crate name must be reserved
+  on crates.io and a publish-capable token stored as the
+  `CARGO_REGISTRY_TOKEN` secret before the first automated release. See
+  "First release: one-time setup" below.
+
+### Publish targets per repo
+
+- `keystate-core` and each adapter publish as crates (crates.io once the
+  project is public and stable enough to commit to that namespace; a private
+  registry is fine in the meantime).
+- `keystate-cli` is the only repo that builds and publishes the actual
+  distributable: the binary release on GitHub Releases, and the Docker
+  image, pushed on every tagged release via CI.
+
+### First release: one-time setup
+
+1. **Reserve the name.** Run `cargo publish` once manually (or add the user
+   to the crates.io crate) so `keystate-adapter-keycloak` belongs to an
+   account you control. Until then the automated publish has nothing to
+   publish to.
+2. **Add the token.** Under repo Settings → Secrets → Actions, create
+   `CARGO_REGISTRY_TOKEN` with a crates.io token that has publish rights.
+3. **Allow Actions to open the release PR.** release-plz opens the PR with
+   the built-in `GITHUB_TOKEN`. If the org blocks that, the run fails with
+   `GitHub Actions is not permitted to create or approve pull requests`.
+   Fix under repo Settings → Actions → General → *Workflow permissions*:
+   check **Allow GitHub Actions to create and approve pull requests**. If the
+   org forbids enabling it, use a fine-grained PAT (read/write on contents
+   and pull requests) stored as a secret and pass it as `GITHUB_TOKEN`
+   instead — the workflow's `permissions` block then needs no `contents`/PR
+   grant.
+4. Merge a `feat:` (or `fix:`) PR to `develop`. When ready, open the release
+   PR from `develop` to `main` and merge it. The pipeline does the rest:
+   release PR → merge → tag → crates.io publish → GitHub release.
+
+### No release goes out on a failing build
+
+The scheduled backend-matrix and completeness-regression tests (from the
+development document) act as a further gate — if a nightly run against
+`develop` is red, the fix lands before the next release, not after.
+
+### Branch protection
+
+Protect `develop` (require PRs + review) so no work bypasses `ci.yml`, and
+protect `main` (require PRs, require status checks, disallow force push and
+direct pushes) so the only path into `main` is a reviewed release PR. This is
+what makes the "no pushes to main" rule hold mechanically rather than by
+convention.
+
+[release-plz]: https://release-plz.enyx.fr/
 
 ## 3. The Compatibility Matrix
 
