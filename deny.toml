@@ -1,0 +1,17 @@
+[advisories]
+unmaintained = "workspace"
+unsound = "all"
+ignore = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+]
