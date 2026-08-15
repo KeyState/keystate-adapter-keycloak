@@ -18,10 +18,11 @@ pub struct KeycloakConnection {
 impl KeycloakConnection {
     /// Connect to the Keycloak database described by `database_url`.
     ///
-    /// The session is forced read-only and to a transaction-isolation level
-    /// that never blocks the live server's writers (`REPEATABLE READ` gives a
-    /// consistent snapshot without taking locks), with a 60s statement
-    /// timeout so a hung query cannot hold a connection forever.
+    /// The session is forced read-only with a 60s statement timeout, so the
+    /// adapter can never modify a live Keycloak database and a hung query
+    /// cannot hold a connection forever. Reads run at the database's default
+    /// isolation level (which, like a single query per entity, is safe for a
+    /// read-only extraction).
     pub async fn connect(database_url: &str) -> Result<Self> {
         let options = connect_options(database_url)?;
         let pool = PgPoolOptions::new()
@@ -64,7 +65,6 @@ pub fn connect_options(database_url: &str) -> Result<PgConnectOptions> {
                 .application_name("keystate-adapter-keycloak")
                 .options([
                     ("default_transaction_read_only", "on"),
-                    ("default_transaction_isolation", "repeatable read"),
                     ("statement_timeout", "60000"),
                 ])
         })
