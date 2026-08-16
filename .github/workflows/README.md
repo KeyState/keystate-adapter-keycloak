@@ -20,7 +20,7 @@ newer push supersedes them.
 | `fmt` | `cargo fmt --all -- --check` — enforces the shared formatting. |
 | `clippy` | `cargo clippy --all-targets -- -D warnings` — lints all targets, warnings are errors. |
 | `test` | `cargo test --all-targets` plus `cargo test --doc` — unit, integration, and doc tests. |
-| `test-integration` | Spins up Keycloak 26.7 + Postgres as service containers and runs the live-database suite (`tests/integration.rs`, the `#[ignore]`d tests) against them. This validates the adapter's SQL assumptions against the real schema. |
+| `test-integration` | Runs the repo's `docker-compose.yml` stack (Keycloak 26.7 + Postgres) on the runner via `docker compose up -d --wait`, then runs the live-database suite (`tests/integration.rs`, the `#[ignore]`d tests) against it. This validates the adapter's SQL assumptions against the real schema. The compose file's `depends_on` + healthchecks order the startup (GitHub's `services:` containers start concurrently, so a DB-backed service can fail its first boot). |
 | `msrv` | `cargo check --all-targets` on Rust 1.85 — proves the published MSRV (`rust-version` in `Cargo.toml`) still compiles. |
 | `audit` | `rustsec/audit-check@v2` — blocks on known vulnerabilities in the dependency tree. |
 | `deny` | `embarkStudios/cargo-deny-action@v2` — enforces the license allowlist and dependency policy in `deny.toml`. |

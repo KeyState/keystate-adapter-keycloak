@@ -202,7 +202,7 @@ CI lives in `.github/workflows/ci.yml` (checks) and
 
 | Trigger | Checks |
 |---|---|
-| Every PR (to develop or main) and every push to develop | `cargo fmt --check`, `cargo clippy -- -D warnings`, unit + doc tests, integration tests against a live Keycloak (via service containers in CI), MSRV check (1.85), `cargo audit`, `cargo deny` |
+| Every PR (to develop or main) and every push to develop | `cargo fmt --check`, `cargo clippy -- -D warnings`, unit + doc tests, integration tests against a live Keycloak (via the repo's `docker-compose.yml` stack in CI), MSRV check (1.85), `cargo audit`, `cargo deny` |
 | PR to main (the release PR) | Quality gate: fmt, clippy, tests, `cargo package` |
 | Release PR merged into main | release-plz creates the git tag (`keystate-adapter-keycloak-v<version>`), publishes to crates.io, and creates the GitHub release |
 | Nightly, scheduled | Full backend version matrix (integration tests across all supported versions), completeness regression test (adapter repos) |
