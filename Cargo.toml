@@ -1,0 +1,28 @@
+[package]
+name = "keystate-adapter-keycloak"
+version = "0.2.0"
+edition = "2024"
+description = "Keycloak database extraction adapter for Keystate."
+license = "Apache-2.0"
+rust-version = "1.85"
+readme = "README.md"
+repository = "https://github.com/KeyState/keystate-adapter-keycloak"
+homepage = "https://github.com/KeyState/keystate-adapter-keycloak"
+documentation = "https://docs.rs/keystate-adapter-keycloak"
+keywords = ["keycloak", "identity", "iam", "configuration", "extraction"]
+categories = ["database", "command-line-utilities"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+keystate-core = { version = "0.1.0", git = "https://github.com/KeyState/keystate-core", branch = "develop" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres"] }
+thiserror = "2.0"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+tempfile = "3.0"
