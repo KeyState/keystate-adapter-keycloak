@@ -67,6 +67,14 @@ directly. A release is the deliberate act of opening a **release PR from
   (`feat:` → minor, `fix:`/`chore:` → patch, breaking → major), which keeps
   the versioning policy above mechanical rather than a judgement call per
   release.
+- **Release train: crates.io pins, never git refs.** Releases run bottom-up
+  in dependency order (`keystate-core` → adapter → `keystate-cli`), and a
+  published crate must not carry git dependencies (crates.io rejects them).
+  So `keystate-core` and the adapters track each other via git branch refs
+  during development, and the release PR that ships a crate switches its
+  dependencies to the released crates.io versions. `keystate-cli` pins the
+  released core and adapter versions the same way before it tags. A crate is
+  only published once everything it depends on is already released.
 - **First publish is the one manual step.** The crate name must be reserved
   on crates.io and a publish-capable token stored as the
   `CARGO_REGISTRY_TOKEN` secret before the first automated release. See
