@@ -11,7 +11,7 @@ use sqlx::PgPool;
 
 use crate::db::error::{Error, Result};
 
-/// Query returning the highest applied schema version, e.g. `26.7.0`.
+/// Query returning the highest applied schema version, e.g. `26.5.5`.
 ///
 /// Keycloak records every applied migration in `MIGRATION_MODEL` with a
 /// monotonically increasing `UPDATE_TIME`, so the most recent row is the
@@ -29,7 +29,7 @@ const VERSION_QUERY: &str = r#"
 /// version at a time — the current stable at the moment the release was cut.
 /// Supporting additional versions is a separate, paid maintenance effort, not
 /// part of the core release. See `RELEASE.md` §2 in this repository.
-pub const SUPPORTED_KEYCLOAK_VERSION: &str = "26.7.0";
+pub const SUPPORTED_KEYCLOAK_VERSION: &str = "26.5.5";
 
 /// Detect the Keycloak schema version present in the database.
 ///

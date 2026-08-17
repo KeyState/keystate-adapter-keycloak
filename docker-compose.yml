@@ -1,6 +1,6 @@
 # Local integration-test stack for keystate-adapter-keycloak.
 #
-# Spins up Keycloak 26.7.0 backed by Postgres — the exact version the adapter
+# Spins up Keycloak 26.5.5 backed by Postgres — the exact version the adapter
 # pins in src/db/version.rs (SUPPORTED_KEYCLOAK_VERSION). This is what both
 # local development and the testcontainers-based integration tests run
 # against.
@@ -28,7 +28,7 @@ services:
       - "5432:5432"
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.7.0
+    image: quay.io/keycloak/keycloak:26.5.5
     command: start-dev
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
