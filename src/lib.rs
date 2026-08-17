@@ -21,6 +21,8 @@
 //!   returning native JSON faithful to Keycloak's own field shape.
 //! - [`manifest`] — per-version field manifests describing what a given
 //!   Keycloak version must expose.
+//! - [`export`] — rendering the canonical extraction into Keycloak's
+//!   importable realm-export format for the config-cli round-trip validation.
 //!
 //! See `ARCHITECTURE.md` in this repository for the full design, and the
 //! companion `keystate-core` crate for the ports and canonical model.
@@ -28,10 +30,12 @@
 #![warn(missing_docs)]
 
 pub mod db;
+pub mod export;
 pub mod extract;
 pub mod manifest;
 
 pub use db::{KeycloakConnection, SUPPORTED_KEYCLOAK_VERSION, detect_keycloak_version};
+pub use export::realm_export;
 pub use extract::{KeycloakExtractor, merge_attributes, realm_from_native};
 pub use manifest::keycloak_manifest;
 
