@@ -9,7 +9,7 @@ const SUPPORTED: &str = keystate_adapter_keycloak::SUPPORTED_KEYCLOAK_VERSION;
 fn supported_version_parses() {
     assert_eq!(
         SUPPORTED.parse::<Version>().unwrap(),
-        Version::new(26, 7, 0)
+        Version::new(26, 5, 5)
     );
 }
 
