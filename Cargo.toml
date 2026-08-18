@@ -1,6 +1,6 @@
 [package]
 name = "keystate-adapter-keycloak"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Keycloak database extraction adapter for Keystate."
 license = "Apache-2.0"
@@ -16,7 +16,11 @@ categories = ["database", "command-line-utilities"]
 all-features = true
 
 [dependencies]
-keystate-core = { version = "0.1.0", git = "https://github.com/KeyState/keystate-core", branch = "develop" }
+# Released crates are pinned to crates.io versions (no git refs). During
+# development the adapter tracks keystate-core via git branch refs; this
+# switch to a released version happens only in the release-train PR, so the
+# published crate has no git dependencies (crates.io rejects those).
+keystate-core = "0.1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres"] }
